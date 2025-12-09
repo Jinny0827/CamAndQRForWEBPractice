@@ -2,9 +2,103 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Title</title>
+  <title>모바일 QR 스캐너</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+</head>
 </head>
 <body>
+  <h1>QR 스캐너</h1>
+  <video id="camera" autoplay playsinline width="300" style="display:none;"></video><br>
 
+  <button onclick="startCamera()" id="startBtn">카메라 시작</button>
+
+  <canvas id="canvas" style="display:none;"></canvas>
+  <div id="status">카메라 시작 버튼을 눌러주세요</div>
+  <div id="result" style="margin-top:20px; padding:10px; border:1px solid #ccc; display:none;">
+    <strong>인식된 QR 코드:</strong><br>
+    <span id="qrData"></span>
+  </div>
 </body>
+  <script>
+    let stream = null;
+    let scanning = false;
+
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
+
+        document.getElementById('camera').srcObject = stream;
+        document.getElementById('camera').style.display = 'block';
+
+        document.getElementById('startBtn').style.display = 'none';
+        document.getElementById('status').innerHTML = 'QR 코드를 카메라에 비춰주세요';
+
+        scanning = true;
+        scanQR();
+
+      } catch (e) {
+        document.getElementById('status').innerHTML = '카메라 접근 실패: ' + e.message;
+      }
+    }
+
+    function scanQR() {
+      if (!scanning) return;
+
+      const video = document.getElementById('camera');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+
+      if(video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+        if(code) {
+          document.getElementById('qrData').textContent = code.data;
+          document.getElementById('result').style.display = 'block';
+          document.getElementById('status').innerHTML = '✅ QR 코드 인식 완료!';
+
+          if(isValidURL(code.data)) {
+            setTimeout(() => {
+              if (confirm('인식된 QR 코드가 웹사이트 링크입니다. 열어보시겠습니까?')) {
+                window.open(code.data, '_blank');
+              }
+            }, 1000);
+          }
+
+          setTimeout(() => {
+            document.getElementById('status').innerHTML = 'QR 코드를 카메라에 비춰주세요';
+            requestAnimationFrame(scanQR);
+          }, 2000);
+          return;
+        }
+      }
+
+      requestAnimationFrame(scanQR);
+    }
+
+
+    // URL 유효성 검사
+    function isValidURL(string) {
+      try {
+        new URL(string);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    // 카메라 정리
+    window.addEventListener('beforeunload', () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    });
+
+  </script>
 </html>
